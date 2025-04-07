@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Simulador Dijkstra</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+      #network {
+        width: 100%;
+        height: 500px;
+        border: 1px solid black;
+        margin-bottom: 10px;
+      }
+      .controls {
+        margin-bottom: 10px;
+      }
+      select,
+      input,
+      button {
+        margin: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Simulador de Dijkstra (Con Visualización)</h2>
+    <div class="controls">
+      <button onclick="addNode()">Agregar Nodo</button><br />
+      De:
+      <select id="fromNode"></select>
+      A:
+      <select id="toNode"></select>
+      Peso: <input type="number" id="edgeWeight" />
+      <button onclick="addEdge()">Agregar Arista</button><br />
+      Inicio:
+      <select id="startNode"></select>
+      Fin:
+      <select id="endNode"></select>
+      <button onclick="runDijkstra()">Ejecutar Dijkstra</button>
+    </div>
+
+    <div id="network"></div>
+    <p id="result"></p>
+
+    <script>
+      let nodeCount = 0;
+      const nodes = new vis.DataSet();
+      const edges = new vis.DataSet();
+
+      const container = document.getElementById("network");
+      const data = { nodes, edges };
+      const network = new vis.Network(container, data, {
+        edges: { arrows: "to" },
+        physics: false,
+      });
+
+      function updateDropdowns() {
+        const allNodes = nodes.get();
+        ["fromNode", "toNode", "startNode", "endNode"].forEach((id) => {
+          const select = document.getElementById(id);
+          select.innerHTML = "";
+          allNodes.forEach((node) => {
+            const option = document.createElement("option");
+            option.value = node.id;
+            option.text = node.label;
+            select.appendChild(option);
+          });
+        });
+      }
+
+      function addNode() {
+        const nodeId = `N${nodeCount++}`;
+        nodes.add({ id: nodeId, label: nodeId });
+        updateDropdowns();
+      }
+
+      function addEdge() {
+        const from = document.getElementById("fromNode").value;
+        const to = document.getElementById("toNode").value;
+        const weight = document.getElementById("edgeWeight").value;
+
+        if (from && to && weight) {
+          edges.add({ from, to, label: weight, arrows: "to" });
+        }
+      }
+
+      async function runDijkstra() {
+        const start = document.getElementById("startNode").value;
+        const end = document.getElementById("endNode").value;
+
+        const response = await fetch("/dijkstra", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nodes: nodes.get(),
+            edges: edges.get(),
+            start,
+            end,
+          }),
+        });
+
+        const result = await response.json();
+        document.getElementById("result").innerText = `Distancia mínima: ${
+          result.distance
+        }\nRuta: ${result.path.join(" → ")}`;
+
+        // Visualizar camino más corto
+        const path = result.path;
+        for (let i = 0; i < path.length; i++) {
+          nodes.update({ id: path[i], color: { background: "lightgreen" } });
+          if (i < path.length - 1) {
+            const edge = edges
+              .get()
+              .find((e) => e.from === path[i] && e.to === path[i + 1]);
+            if (edge) {
+              edges.update({ id: edge.id, color: "red", width: 3 });
+            }
+          }
+          await new Promise((r) => setTimeout(r, 600));
+        }
+      }
+    </script>
+  </body>
+</html>
